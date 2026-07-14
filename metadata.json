@@ -1,0 +1,6 @@
+{
+  "name": "IAOS Logistics Freight Audit",
+  "description": "Enterprise-grade Logistics and Freight Audit platform of the Integrated Audit Operating System (IAOS).",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

@@ -1,0 +1,243 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = "file:./dev.db"
+}
+
+model User {
+  id        String   @id @default(uuid())
+  email     String   @unique
+  name      String
+  role      String   // Administrator, AuditManager, LeadAuditor, SeniorAuditor, Auditor, BusinessUser, Viewer
+  password  String   // In a real app, this would be hashed
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  findings  Finding[]
+  exceptions Exception[]
+  workingPapers WorkingPaper[]
+}
+
+model Carrier {
+  id              String   @id @default(uuid())
+  name            String   @unique
+  code            String   @unique
+  onTimeRate      Float    // SLA metric e.g. 94.5
+  damageRate      Float    // e.g. 0.8
+  claimsRate      Float    // e.g. 1.2
+  lateDeliveries  Int
+  performanceScore Float   // 0-100
+  ranking         Int
+  contracts       Contract[]
+  invoices        FreightInvoice[]
+}
+
+model Plant {
+  id        String           @id @default(uuid())
+  name      String           @unique
+  code      String           @unique
+  city      String
+  country   String
+  invoices  FreightInvoice[]
+}
+
+model Route {
+  id             String           @id @default(uuid())
+  origin         String
+  destination    String
+  gpsDistanceKm  Float
+  billedDistanceKm Float
+  optimalRoute   String
+  invoices       FreightInvoice[]
+}
+
+model Contract {
+  id             String           @id @default(uuid())
+  contractNumber String           @unique
+  carrierId      String
+  carrier        Carrier          @relation(fields: [carrierId], references: [id])
+  baseRate       Float
+  tolerancePct   Float            // Tolerance percent e.g. 2.0%
+  fuelFormula    String           // Formula description
+  validFrom      DateTime
+  validTo        DateTime
+  invoices       FreightInvoice[]
+}
+
+model FreightInvoice {
+  id                 String   @id @default(uuid())
+  invoiceNumber      String   @unique
+  carrierId          String
+  carrier            Carrier  @relation(fields: [carrierId], references: [id])
+  plantId            String
+  plant              Plant    @relation(fields: [plantId], references: [id])
+  routeId            String
+  route              Route    @relation(fields: [routeId], references: [id])
+  contractId         String
+  contract           Contract @relation(fields: [contractId], references: [id])
+  
+  // Rate Compliance (Module 1)
+  contractRate       Float
+  billedRate         Float
+  rateVariance       Float
+  rateToleranceExceeded Boolean
+  rateRecoverableAmt Float
+
+  // Weight / Volume (Module 2)
+  actualWeightKg     Float
+  chargedWeightKg    Float
+  volumeCbm          Float
+  weightVariance     Float
+  weightToleranceExceeded Boolean
+
+  // Route & Distance (Module 3)
+  gpsDistance        Float
+  billedDistance     Float
+  routeInflationPct  Float
+
+  // Detention & Demurrage (Module 4)
+  detentionCharges   Float
+  demurrageCharges   Float
+  waitingTimeHours   Float
+  detentionRecoverable Float
+
+  // Fuel Surcharge (Module 8)
+  fuelIndexApplied   Float
+  billedFuelSurcharge Float
+  calculatedFuelSurcharge Float
+  fuelVariance       Float
+
+  // Empty Return & Backhaul (Module 9)
+  isReturnTrip       Boolean  @default(false)
+  vehicleUtilizationPct Float
+  isBackhaul         Boolean  @default(false)
+  lostOpportunityAmt Float
+
+  // Matching LR/POD (Module 10)
+  lrNumber           String
+  podStatus          String   // Matched, Missing, Discrepancy
+  shipmentNumber     String
+
+  // Provisions (Module 11)
+  accruedAmount      Float
+  differenceAmount   Float
+
+  // Transit SLA (Module 12)
+  transitDaysActual  Int
+  transitDaysSLA     Int
+  isLate             Boolean
+
+  // Placement (Module 14)
+  placementDelayHours Float
+  indentQuantity     Int
+  placedQuantity     Int
+
+  // General billing
+  totalBilledAmount  Float
+  invoiceDate        DateTime
+  status             String   // Pending, Audited, Disputed, Approved
+  
+  exceptions         Exception[]
+}
+
+model Exception {
+  id              String         @id @default(uuid())
+  ruleId          String
+  invoiceId       String
+  invoice         FreightInvoice @relation(fields: [invoiceId], references: [id])
+  severity        String         // High, Medium, Low
+  description     String
+  status          String         // Open, Investigating, Resolved, Closed
+  assignedToId    String?
+  assignedTo      User?          @relation(fields: [assignedToId], references: [id])
+  priority        String         // Urgent, High, Normal, Low
+  createdAt       DateTime       @default(now())
+  comments        Comment[]
+}
+
+model Comment {
+  id          String    @id @default(uuid())
+  exceptionId String
+  exception   Exception @relation(fields: [exceptionId], references: [id])
+  authorName  String
+  text        String
+  createdAt   DateTime  @default(now())
+}
+
+model Finding {
+  id             String   @id @default(uuid())
+  title          String
+  observation    String
+  rootCause      String
+  impact         Float    // Monetary impact e.g. 45000.00
+  recommendation String
+  riskRating     String   // High, Medium, Low
+  owner          String
+  status         String   // Open, Under_Review, Resolved, Closed
+  createdAt      DateTime @default(now())
+  authorId       String
+  author         User     @relation(fields: [authorId], references: [id])
+  remediations   Remediation[]
+}
+
+model Remediation {
+  id          String   @id @default(uuid())
+  findingId   String
+  finding     Finding  @relation(fields: [findingId], references: [id])
+  capaAction  String
+  owner       String
+  dueDate     DateTime
+  progress    Int      // 0 to 100
+  evidence    String?
+  retestingStatus String // Pending, Pass, Fail
+  status      String   // Draft, Active, Completed
+  createdAt   DateTime @default(now())
+}
+
+model RiskControl {
+  id             String   @id @default(uuid())
+  riskCode       String   @unique
+  riskName       String
+  controlName    String
+  assertion      String   // Completeness, Accuracy, Valuation, etc.
+  owner          String
+  frequency      String   // Daily, Weekly, Monthly, Quarterly, Annual
+  testProcedure  String
+}
+
+model Rule {
+  id          String   @id @default(uuid())
+  name        String   @unique
+  category    String   // Compliance, Weight, Duplicates, Fuel, SLA, etc.
+  threshold   Float
+  severity    String   // High, Medium, Low
+  sqlRule     String
+  isEnabled   Boolean  @default(true)
+}
+
+model SamplingConfig {
+  id          String   @id @default(uuid())
+  method      String   // Random, MonetaryUnit, RiskBased, Custom
+  sampleSize  Int
+  confidenceLevel Float // e.g. 95.0
+  materialityLimit Float // e.g. 5000.0
+  createdAt   DateTime @default(now())
+}
+
+model WorkingPaper {
+  id          String   @id @default(uuid())
+  fileName    String
+  fileSize    String
+  fileType    String   // PDF, XLSX, DOCX
+  uploadedBy  String
+  user        User     @relation(fields: [uploadedBy], references: [id])
+  tickMarks   String   // JSON list of tickmarks applied
+  reviewerSignoff Boolean @default(false)
+  reviewerName String?
+  createdAt   DateTime @default(now())
+}
