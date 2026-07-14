@@ -20,6 +20,7 @@ import {
   WorkingPaper, 
   DashboardStats 
 } from "./types";
+const API = import.meta.env.VITE_API_URL;
 
 export default function App() {
   // Authentication state
@@ -232,7 +233,7 @@ export default function App() {
   // 24. Observations CRUD
   const handleAddFinding = async (findingPayload: any) => {
     try {
-      const res = await fetch("/api/findings", {
+     const res = await fetch(`${API}/api/findings`,{
         method: "POST",
         headers: getAuthHeaders(),
         body: JSON.stringify({
